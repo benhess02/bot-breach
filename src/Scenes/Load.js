@@ -15,6 +15,9 @@ class Load extends Phaser.Scene {
             frameHeight: 64,
             spacing: 10
         });
+
+        this.load.image("blaster", "blaster.png");
+        this.load.image("lazer", "lazer.png");
     }
 
     create() {

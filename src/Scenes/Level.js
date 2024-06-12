@@ -18,10 +18,66 @@ class Level extends Phaser.Scene {
         this.TILEHEIGHT = 25;
 
         this.PLAYER_SPEED = 200;
+        this.LAZER_SPEED = 1000;
     }
 
+    createRobot(baseSprite) {
+        this.physics.world.enable(baseSprite, Phaser.Physics.Arcade.DYNAMIC_BODY);
+        this.physics.add.collider(baseSprite, this.groundLayer);
+        return {
+            xVelocity: 0,
+            yVelocity: 0,
+            baseRotation: baseSprite.rotation,
+            blasterRotation: baseSprite.rotation,
+            baseSprite: baseSprite,
+            blasterSprite: this.add.sprite(baseSprite.x, baseSprite.y, "blaster")
+        }
+    }
+
+    updateRobot(robot) {
+        if(robot.xVelocity != 0 || robot.yVelocity != 0) {
+            var sqMag = robot.xVelocity * robot.xVelocity + robot.yVelocity * robot.yVelocity;
+            if(sqMag > 1.01) {
+                var mag = Math.sqrt(sqMag);
+                robot.xVelocity = (robot.xVelocity / mag) * this.PLAYER_SPEED;
+                robot.yVelocity = (robot.yVelocity / mag) * this.PLAYER_SPEED;
+            }
+            robot.baseRotation = Math.atan2(robot.yVelocity, robot.xVelocity);
+        }
+
+        var rot = robot.baseRotation - robot.baseSprite.rotation;
+
+        if(rot > Math.PI) {
+            rot -= Math.PI * 2;
+        } else if(rot < -Math.PI) {
+            rot += Math.PI * 2;
+        }
+
+        robot.baseSprite.body.setVelocityX(robot.xVelocity);
+        robot.baseSprite.body.setVelocityY(robot.yVelocity);
+
+        robot.baseSprite.rotation += rot / 4;
+
+        robot.blasterSprite.x = robot.baseSprite.x;
+        robot.blasterSprite.y = robot.baseSprite.y;
+        robot.blasterSprite.rotation = robot.blasterRotation;
+    }
+
+    fireLazer(robot) {
+        var x = robot.baseSprite.x + Math.cos(robot.blasterRotation) * 35; 
+        var y = robot.baseSprite.y + Math.sin(robot.blasterRotation) * 35; 
+        var lazer = this.add.sprite(x, y, "lazer");
+        lazer.rotation = robot.blasterRotation;
+        this.physics.world.enable(lazer, Phaser.Physics.Arcade.DYNAMIC_BODY);
+        lazer.body.setVelocityX(Math.cos(lazer.rotation) * this.LAZER_SPEED);
+        lazer.body.setVelocityY(Math.sin(lazer.rotation) * this.LAZER_SPEED);
+        this.physics.world.addCollider(lazer, this.groundLayer, function() {
+            lazer.destroy();
+        });
+    }
+  
     create() {
-        this.map = this.add.tilemap("tilemap", this.TILESIZE, this.TILESIZE, this.TILEHEIGHT, this.TILEWIDTH);
+        this.map = this.add.tilemap("tilemap");
 
         this.tileset = this.map.addTilesetImage("tilesheet", "tilesheet");
 
@@ -31,16 +87,27 @@ class Level extends Phaser.Scene {
             collides: true
         });
 
-        this.player = this.map.createFromObjects("Player", { key: "robots_sheet", frame: 0 })[0];
-        this.physics.world.enable(this.player, Phaser.Physics.Arcade.DYNAMIC_BODY);
-        this.physics.add.collider(this.player, this.groundLayer);
-        this.cameras.main.startFollow(this.player, true, 0.25, 0.25);
+        var playerSprite = this.map.createFromObjects("Player", { key: "robots_sheet", frame: 0 })[0];
+        this.player = this.createRobot(playerSprite);
+        this.cameras.main.startFollow(playerSprite, true, 0.25, 0.25);
         this.cameras.main.setBounds(0, 0, this.map.widthInPixels, this.map.heightInPixels);
+        this.cameras.main.setDeadzone(50, 50);
 
         this.wKey = this.input.keyboard.addKey("W");
         this.aKey = this.input.keyboard.addKey("A");
         this.sKey = this.input.keyboard.addKey("S");
         this.dKey = this.input.keyboard.addKey("D");
+        this.spaceKey = this.input.keyboard.addKey("Space");
+
+        var scene = this;
+
+        this.input.on("pointerdown", function() {
+            scene.fireLazer(scene.player);
+        });
+
+        this.events.on("postupdate", function() {
+            scene.postUpdate();
+        });
 
         // // Create grid of visible tiles for use with path planning
         // let tinyTownGrid = this.layersToGrid([this.groundLayer, this.treesLayer, this.housesLayer]);
@@ -71,21 +138,31 @@ class Level extends Phaser.Scene {
 
     }
 
+    postUpdate() {
+        this.updateRobot(this.player);
+    }
+
     update() {
-        this.player.body.setVelocityX(0);
-        this.player.body.setVelocityY(0);
+        this.player.xVelocity = 0;
+        this.player.yVelocity = 0;
         if(this.wKey.isDown) {
-            this.player.body.setVelocityY(-this.PLAYER_SPEED);
+            this.player.yVelocity = -this.PLAYER_SPEED;
         }
         if(this.aKey.isDown) {
-            this.player.body.setVelocityX(-this.PLAYER_SPEED);
+            this.player.xVelocity = -this.PLAYER_SPEED;
         }
         if(this.sKey.isDown) {
-            this.player.body.setVelocityY(this.PLAYER_SPEED);
+            this.player.yVelocity = this.PLAYER_SPEED;
         }
         if(this.dKey.isDown) {
-            this.player.body.setVelocityX(this.PLAYER_SPEED);
+            this.player.xVelocity = this.PLAYER_SPEED;
         }
+
+        var mx = this.input.mousePointer.x - config.width / 2;
+        var my = this.input.mousePointer.y - config.height / 2;
+        var px = this.player.baseSprite.x - (this.cameras.main.scrollX + config.width / 2);
+        var py = this.player.baseSprite.y - (this.cameras.main.scrollY + config.height / 2);
+        this.player.blasterRotation = Math.atan2(my - py, mx - px);
     }
 
     resetCost(tileset) {
