@@ -13,7 +13,7 @@ class Load extends Phaser.Scene {
         this.load.spritesheet("robots_sheet", "robots.png", {
             frameWidth: 62,
             frameHeight: 64,
-            spacing: 10
+            spacing: 0
         });
 
         this.load.image("blaster", "blaster.png");

@@ -1,6 +1,9 @@
 class Level extends Phaser.Scene {
 
+    robotGroup;
+
     player;
+    enemies;
 
     wKey; aKey; sKey; dKey;
 
@@ -24,6 +27,8 @@ class Level extends Phaser.Scene {
     createRobot(baseSprite) {
         this.physics.world.enable(baseSprite, Phaser.Physics.Arcade.DYNAMIC_BODY);
         this.physics.add.collider(baseSprite, this.groundLayer);
+        this.robotGroup.add(baseSprite);
+        this.physics.add.collider(baseSprite, this.robotGroup);
         return {
             xVelocity: 0,
             yVelocity: 0,
@@ -74,6 +79,9 @@ class Level extends Phaser.Scene {
         this.physics.world.addCollider(lazer, this.groundLayer, function() {
             lazer.destroy();
         });
+        this.physics.world.addCollider(lazer, this.robotGroup, function() {
+            lazer.destroy();
+        });
     }
   
     create() {
@@ -87,11 +95,19 @@ class Level extends Phaser.Scene {
             collides: true
         });
 
+        this.robotGroup = this.add.group();
+
         var playerSprite = this.map.createFromObjects("Player", { key: "robots_sheet", frame: 0 })[0];
         this.player = this.createRobot(playerSprite);
         this.cameras.main.startFollow(playerSprite, true, 0.25, 0.25);
         this.cameras.main.setBounds(0, 0, this.map.widthInPixels, this.map.heightInPixels);
         this.cameras.main.setDeadzone(50, 50);
+
+        var enemySprites = this.map.createFromObjects("Enemies", { key: "robots_sheet", frame: 3 });
+        this.enemies = [];
+        for(var i = 0; i < enemySprites.length; i++) {
+            this.enemies.push(this.createRobot(enemySprites[i]));
+        }
 
         this.wKey = this.input.keyboard.addKey("W");
         this.aKey = this.input.keyboard.addKey("A");
@@ -140,6 +156,9 @@ class Level extends Phaser.Scene {
 
     postUpdate() {
         this.updateRobot(this.player);
+        for(var i = 0; i < this.enemies.length; i++) {
+            this.updateRobot(this.enemies[i]);
+        }
     }
 
     update() {
