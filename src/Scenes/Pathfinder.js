@@ -1,4 +1,9 @@
 class Pathfinder extends Phaser.Scene {
+
+    player;
+
+    wKey; aKey; sKey; dKey;
+
     constructor() {
         super("pathfinderScene");
     }
@@ -11,6 +16,8 @@ class Pathfinder extends Phaser.Scene {
         this.SCALE = 2.0;
         this.TILEWIDTH = 40;
         this.TILEHEIGHT = 25;
+
+        this.PLAYER_SPEED = 200;
     }
 
     create() {
@@ -22,9 +29,21 @@ class Pathfinder extends Phaser.Scene {
 
         // // Create the layers
         this.groundLayer = this.map.createLayer("Tiles", this.tileset, 0, 0);
+        this.groundLayer.setCollisionByProperty({
+            collides: true
+        });
 
+        this.player = this.map.createFromObjects("Player", { key: "robots_sheet", frame: 0 })[0];
+        this.physics.world.enable(this.player, Phaser.Physics.Arcade.DYNAMIC_BODY);
+        this.physics.add.collider(this.player, this.groundLayer);
+        this.cameras.main.startFollow(this.player, true, 0.25, 0.25);
+        this.cameras.main.setBounds(0, 0, this.map.widthInPixels, this.map.heightInPixels);
 
-        this.map.createFromObjects("Player", { key: "robots_sheet", frame: 0 });
+        this.wKey = this.input.keyboard.addKey("W");
+        this.aKey = this.input.keyboard.addKey("A");
+        this.sKey = this.input.keyboard.addKey("S");
+        this.dKey = this.input.keyboard.addKey("D");
+
         // this.treesLayer = this.map.createLayer("Trees-n-Bushes", this.tileset, 0, 0);
         // this.housesLayer = this.map.createLayer("Houses-n-Fences", this.tileset, 0, 0);
 
@@ -66,17 +85,20 @@ class Pathfinder extends Phaser.Scene {
     }
 
     update() {
-        // if (Phaser.Input.Keyboard.JustDown(this.cKey)) {
-        //     if (!this.lowCost) {
-        //         // Make the path low cost with respect to grassy areas
-        //         this.setCost(this.tileset);
-        //         this.lowCost = true;
-        //     } else {
-        //         // Restore everything to same cost
-        //         this.resetCost(this.tileset);
-        //         this.lowCost = false;
-        //     }
-        // }
+        this.player.body.setVelocityX(0);
+        this.player.body.setVelocityY(0);
+        if(this.wKey.isDown) {
+            this.player.body.setVelocityY(-this.PLAYER_SPEED);
+        }
+        if(this.aKey.isDown) {
+            this.player.body.setVelocityX(-this.PLAYER_SPEED);
+        }
+        if(this.sKey.isDown) {
+            this.player.body.setVelocityY(this.PLAYER_SPEED);
+        }
+        if(this.dKey.isDown) {
+            this.player.body.setVelocityX(this.PLAYER_SPEED);
+        }
     }
 
     resetCost(tileset) {

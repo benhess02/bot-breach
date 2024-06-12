@@ -54,6 +54,7 @@
         "tilemap.tmx"
     ],
     "project": "level1.tiled-project",
+    "property.type": "bool",
     "recentFiles": [
         "tilemap.tmx",
         "three-farmhouses.tmj"
