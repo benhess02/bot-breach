@@ -21,7 +21,10 @@ class Pathfinder extends Phaser.Scene {
         this.tileset = this.map.addTilesetImage("tilesheet", "tilesheet");
 
         // // Create the layers
-        this.groundLayer = this.map.createLayer("Tile Layer 1", this.tileset, 0, 0);
+        this.groundLayer = this.map.createLayer("Tiles", this.tileset, 0, 0);
+
+
+        this.map.createFromObjects("Player", { key: "robots_sheet", frame: 0 });
         // this.treesLayer = this.map.createLayer("Trees-n-Bushes", this.tileset, 0, 0);
         // this.housesLayer = this.map.createLayer("Houses-n-Fences", this.tileset, 0, 0);
 
