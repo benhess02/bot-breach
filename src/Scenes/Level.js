@@ -1,4 +1,17 @@
+var neighbors = [
+    { x: 1, y: 0 }, 
+    { x:-1, y: 0 },
+    { x: 0, y: 1 },
+    { x: 0, y: -1 },
+    { x: 1, y: 1 },
+    { x: 1, y: -1 },
+    { x: -1, y: 1 },
+    { x: -1, y: -1 }
+];
+
 class Level extends Phaser.Scene {
+
+    distanceMapCache;
 
     robotGroup;
 
@@ -9,6 +22,74 @@ class Level extends Phaser.Scene {
 
     constructor() {
         super("levelScene");
+    }
+
+    isWalkable(x, y) {
+        var tile = this.groundLayer.getTileAt(x, y);
+        if(!tile) return false;
+        return !tile.properties.collides;
+    }
+
+    getDistanceMap(targetX, targetY) {
+        targetX = Math.floor(targetX);
+        targetY = Math.floor(targetY);
+        if(this.distanceMapCache[targetX] !== undefined) {
+            if(this.distanceMapCache[targetX][targetY] !== undefined) {
+                return this.distanceMapCache[targetX][targetY];
+            }
+        }
+
+        console.log(targetX + ", " + targetY);
+
+        var distanceMap = [];
+        for(var y = 0; y < this.map.height; y++) {
+            var row = [];
+            for(var x = 0; x < this.map.width; x++) {
+                row.push(Infinity);
+            }
+            distanceMap.push(row);
+        }
+        distanceMap[targetX][targetY] = 0;
+
+        var explored = [];
+        for(var y = 0; y < this.map.height; y++) {
+            var row = [];
+            for(var x = 0; x < this.map.width; x++) {
+                row.push(false);
+            }
+            explored.push(row);
+        }
+
+        var fringe = [{ x: targetX, y: targetY }];
+        while(fringe.length > 0) {
+            var nextFringe = [];
+            for(var i = 0; i < fringe.length; i++) {
+                explored[fringe[i].x][fringe[i].y] = true;
+                for(var j = 0; j < neighbors.length; j++) {
+                    var nextX = fringe[i].x + neighbors[j].x;
+                    var nextY = fringe[i].y + neighbors[j].y;
+                    if(this.isWalkable(nextX, nextY)) {
+                        var step = (neighbors[j].x != 0 && neighbors[j].y != 0) ? Math.sqrt(2) : 1;
+                        var nextDist = distanceMap[fringe[i].x][fringe[i].y] + step;
+                        if(nextDist < distanceMap[nextX][nextY]) {
+                            distanceMap[nextX][nextY] = nextDist;
+                        }
+                        if(!explored[nextX][nextY]) {
+                            explored[nextX][nextY] = true;
+                            nextFringe.push({ x: nextX, y: nextY });
+                        }
+                    }
+                }
+            }
+            fringe = nextFringe;
+        }
+
+        if(this.distanceMapCache[targetX] == undefined) {
+            this.distanceMapCache[targetX] = [];
+        }
+        this.distanceMapCache[targetX][targetY] = distanceMap;
+
+        return distanceMap;
     }
 
     preload() {
@@ -114,9 +195,15 @@ class Level extends Phaser.Scene {
         var x2 = this.player.baseSprite.x;
         var y2 = this.player.baseSprite.y;
         if(this.lineOfSight(x1, y1, x2, y2)) {
+            robot.active = true;
+            robot.lastSeenX = x2;
+            robot.lastSeenY = y2;
             robot.blasterRotation = Math.atan2(y2 - y1, x2 - x1);
-            var targetXVelocity = x2 - x1;
-            var targetYVelocity = y2 - y1;
+        }
+
+        if(robot.active) {
+            var targetXVelocity = robot.lastSeenX - x1;
+            var targetYVelocity = robot.lastSeenY - y1;
 
             if(Math.abs(targetXVelocity) > Math.abs(targetYVelocity)) {
                 robot.xVelocity = targetXVelocity > 0 ? this.PLAYER_SPEED : -this.PLAYER_SPEED;
@@ -125,13 +212,13 @@ class Level extends Phaser.Scene {
                 robot.xVelocity = 0;
                 robot.yVelocity = targetYVelocity > 0 ? this.PLAYER_SPEED : -this.PLAYER_SPEED;
             }
-        } else {
-            robot.xVelocity = 0;
-            robot.yVelocity = 0;
         }
     }
 
     create() {
+
+        this.distanceMapCache = [];
+
         this.map = this.add.tilemap("tilemap");
 
         this.tileset = this.map.addTilesetImage("tilesheet", "tilesheet");
@@ -170,36 +257,6 @@ class Level extends Phaser.Scene {
         this.events.on("postupdate", function() {
             scene.postUpdate();
         });
-
-        console.log(this.groundLayer.getTileAt(0, 0));
-
-        // // Create grid of visible tiles for use with path planning
-        // let tinyTownGrid = this.layersToGrid([this.groundLayer, this.treesLayer, this.housesLayer]);
-
-        // let walkables = [1, 2, 3, 30, 40, 41, 42, 43, 44, 95, 13, 14, 15, 25, 26, 27, 37, 38, 39, 70, 84];
-
-        // // Initialize EasyStar pathfinder
-        // this.finder = new EasyStar.js();
-
-        // // Pass grid information to EasyStar
-        // // EasyStar doesn't natively understand what is currently on-screen,
-        // // so, you need to provide it that information
-        // this.finder.setGrid(tinyTownGrid);
-
-        // // Tell EasyStar which tiles can be walked on
-        // this.finder.setAcceptableTiles(walkables);
-
-        // this.activeCharacter = my.sprite.purpleTownie;
-
-        // // Handle mouse clicks
-        // // Handles the clicks on the map to make the character move
-        // // The this parameter passes the current "this" context to the
-        // // function this.handleClick()
-        // this.input.on('pointerup',this.handleClick, this);
-
-        // this.cKey = this.input.keyboard.addKey('C');
-        // this.lowCost = false;
-
     }
 
     postUpdate() {
@@ -214,6 +271,7 @@ class Level extends Phaser.Scene {
     }
 
     update() {
+        this.getDistanceMap(this.player.baseSprite.x / this.map.tileWidth, this.player.baseSprite.y / this.map.tileHeight);
         this.player.xVelocity = 0;
         this.player.yVelocity = 0;
         if(this.wKey.isDown) {
@@ -234,110 +292,5 @@ class Level extends Phaser.Scene {
         var px = this.player.baseSprite.x - (this.cameras.main.scrollX + config.width / 2);
         var py = this.player.baseSprite.y - (this.cameras.main.scrollY + config.height / 2);
         this.player.blasterRotation = Math.atan2(my - py, mx - px);
-    }
-
-    resetCost(tileset) {
-        for (let tileID = tileset.firstgid; tileID < tileset.total; tileID++) {
-            let props = tileset.getTileProperties(tileID);
-            if (props != null) {
-                if (props.cost != null) {
-                    this.finder.setTileCost(tileID, 1);
-                }
-            }
-        }
-    }
-
-    tileXtoWorld(tileX) {
-        return tileX * this.TILESIZE;
-    }
-
-    tileYtoWorld(tileY) {
-        return tileY * this.TILESIZE;
-    }
-
-    // layersToGrid
-    //
-    // Uses the tile layer information in this.map and outputs
-    // an array which contains the tile ids of the visible tiles on screen.
-    // This array can then be given to Easystar for use in path finding.
-    layersToGrid() {
-        let grid = [];
-        // Initialize grid as two-dimensional array
-        for(var y = 0; y < this.map.height; y++) {
-            grid[y] = [];
-        }
-
-        // Loop over layers to find tile IDs, store in grid
-        let arrayOfLayers = this.map.layers;
-        for(var i = 0; i < arrayOfLayers.length; i++) {
-            for(var y = 0; y < this.map.height; y++) {
-                for(var x = 0; x < this.map.width; x++) {
-                    var tile = arrayOfLayers[i].tilemapLayer.getTileAt(x,y);
-                    if(tile) {
-                        grid[y][x] = tile.index;
-                    }
-                }
-            }
-        }
-
-        return grid;
-    }
-
-
-    handleClick(pointer) {
-        let x = pointer.x / this.SCALE;
-        let y = pointer.y / this.SCALE;
-        let toX = Math.floor(x/this.TILESIZE);
-        var toY = Math.floor(y/this.TILESIZE);
-        var fromX = Math.floor(this.activeCharacter.x/this.TILESIZE);
-        var fromY = Math.floor(this.activeCharacter.y/this.TILESIZE);
-        console.log('going from ('+fromX+','+fromY+') to ('+toX+','+toY+')');
-    
-        this.finder.findPath(fromX, fromY, toX, toY, (path) => {
-            if (path === null) {
-                console.warn("Path was not found.");
-            } else {
-                console.log(path);
-                this.moveCharacter(path, this.activeCharacter);
-            }
-        });
-        this.finder.calculate(); // ask EasyStar to compute the path
-        // When the path computing is done, the arrow function given with
-        // this.finder.findPath() will be called.
-    }
-    
-    moveCharacter(path, character) {
-        // Sets up a list of tweens, one for each tile to walk, that will be chained by the timeline
-        var tweens = [];
-        for(var i = 0; i < path.length-1; i++){
-            var ex = path[i+1].x;
-            var ey = path[i+1].y;
-            tweens.push({
-                x: ex*this.map.tileWidth,
-                y: ey*this.map.tileHeight,
-                duration: 200
-            });
-        }
-    
-        this.tweens.chain({
-            targets: character,
-            tweens: tweens
-        });
-
-    }
-
-    // A function which takes as input a tileset and then iterates through all
-    // of the tiles in the tileset to retrieve the cost property, and then 
-    // uses the value of the cost property to inform EasyStar, using EasyStar's
-    // setTileCost(tileID, tileCost) function.
-    setCost(tileset) {
-        for (let tileID = tileset.firstgid; tileID < tileset.total; tileID++) {
-            let props = tileset.getTileProperties(tileID);
-            if (props != null) {
-                if (props.cost != null) {
-                    this.finder.setTileCost(tileID, props.cost);
-                }
-            }
-        }
     }
 }
