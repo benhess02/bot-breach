@@ -18,6 +18,8 @@ class Load extends Phaser.Scene {
 
         this.load.image("blaster", "blaster.png");
         this.load.image("lazer", "lazer.png");
+
+        this.load.atlasXML("ui", "ui_sheet.png", "ui_sheet.xml");
     }
 
     create() {

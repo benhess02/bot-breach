@@ -3,17 +3,16 @@ var neighbors = [
     { x:-1, y: 0 },
     { x: 0, y: 1 },
     { x: 0, y: -1 },
-    { x: 1, y: 1 },
+    /* { x: 1, y: 1 },
     { x: 1, y: -1 },
     { x: -1, y: 1 },
-    { x: -1, y: -1 }
+    { x: -1, y: -1 } */
 ];
 
 class Level extends Phaser.Scene {
 
-    distanceMapCache;
-
     robotGroup;
+    lazerGroup;
 
     player;
     enemies;
@@ -30,68 +29,6 @@ class Level extends Phaser.Scene {
         return !tile.properties.collides;
     }
 
-    getDistanceMap(targetX, targetY) {
-        targetX = Math.floor(targetX);
-        targetY = Math.floor(targetY);
-        if(this.distanceMapCache[targetX] !== undefined) {
-            if(this.distanceMapCache[targetX][targetY] !== undefined) {
-                return this.distanceMapCache[targetX][targetY];
-            }
-        }
-
-        console.log(targetX + ", " + targetY);
-
-        var distanceMap = [];
-        for(var y = 0; y < this.map.height; y++) {
-            var row = [];
-            for(var x = 0; x < this.map.width; x++) {
-                row.push(Infinity);
-            }
-            distanceMap.push(row);
-        }
-        distanceMap[targetX][targetY] = 0;
-
-        var explored = [];
-        for(var y = 0; y < this.map.height; y++) {
-            var row = [];
-            for(var x = 0; x < this.map.width; x++) {
-                row.push(false);
-            }
-            explored.push(row);
-        }
-
-        var fringe = [{ x: targetX, y: targetY }];
-        while(fringe.length > 0) {
-            var nextFringe = [];
-            for(var i = 0; i < fringe.length; i++) {
-                explored[fringe[i].x][fringe[i].y] = true;
-                for(var j = 0; j < neighbors.length; j++) {
-                    var nextX = fringe[i].x + neighbors[j].x;
-                    var nextY = fringe[i].y + neighbors[j].y;
-                    if(this.isWalkable(nextX, nextY)) {
-                        var step = (neighbors[j].x != 0 && neighbors[j].y != 0) ? Math.sqrt(2) : 1;
-                        var nextDist = distanceMap[fringe[i].x][fringe[i].y] + step;
-                        if(nextDist < distanceMap[nextX][nextY]) {
-                            distanceMap[nextX][nextY] = nextDist;
-                        }
-                        if(!explored[nextX][nextY]) {
-                            explored[nextX][nextY] = true;
-                            nextFringe.push({ x: nextX, y: nextY });
-                        }
-                    }
-                }
-            }
-            fringe = nextFringe;
-        }
-
-        if(this.distanceMapCache[targetX] == undefined) {
-            this.distanceMapCache[targetX] = [];
-        }
-        this.distanceMapCache[targetX][targetY] = distanceMap;
-
-        return distanceMap;
-    }
-
     preload() {
     }
 
@@ -105,21 +42,40 @@ class Level extends Phaser.Scene {
         this.LAZER_SPEED = 1000;
     }
 
-    createRobot(baseSprite) {
+    createRobot(baseSprite, totalHealth) {
+
         this.physics.world.enable(baseSprite, Phaser.Physics.Arcade.DYNAMIC_BODY);
-        this.physics.add.collider(baseSprite, this.groundLayer);
         this.robotGroup.add(baseSprite);
+        this.physics.add.collider(baseSprite, this.groundLayer);
         this.physics.add.collider(baseSprite, this.robotGroup);
-        return {
+
+        var healthBarBackground = this.add.sprite(baseSprite.x, baseSprite.y - 50, "ui", "barHorizontal_shadow_mid.png");
+        healthBarBackground.displayWidth = 100;
+        healthBarBackground.displayHeight = 10;
+
+        var healthBar = this.add.sprite(baseSprite.x, baseSprite.y - 50, "ui", "barHorizontal_green_mid.png");
+        healthBar.displayWidth = 100;
+        healthBar.displayHeight = 10;
+
+        var robot = {
             xVelocity: 0,
             yVelocity: 0,
-            oldXVelocity: 0,
-            oldYVelcoity: 0,
+            totalHealth: totalHealth,
+            health: totalHealth,
             baseRotation: baseSprite.rotation,
             blasterRotation: baseSprite.rotation,
             baseSprite: baseSprite,
-            blasterSprite: this.add.sprite(baseSprite.x, baseSprite.y, "blaster")
+            blasterSprite: this.add.sprite(baseSprite.x, baseSprite.y, "blaster"),
+            healthBarBackground: healthBarBackground,
+            healthBar: healthBar
         }
+
+        var scene = this;
+        this.physics.world.addCollider(baseSprite, this.lazerGroup, function(ojb1, obj2) {
+            scene.addHealth(robot, -1);
+            obj2.destroy();
+        });
+        return robot;
     }
 
     updateRobot(robot) {
@@ -148,6 +104,22 @@ class Level extends Phaser.Scene {
         robot.blasterSprite.x = robot.baseSprite.x;
         robot.blasterSprite.y = robot.baseSprite.y;
         robot.blasterSprite.rotation = robot.blasterRotation;
+
+        robot.healthBar.displayWidth = (robot.health / robot.totalHealth) * 100;
+        robot.healthBarBackground.x = robot.baseSprite.x;
+        robot.healthBarBackground.y = robot.baseSprite.y - 50;
+        robot.healthBar.x = (robot.baseSprite.x - 50) + (robot.healthBar.displayWidth / 2);
+        robot.healthBar.y = robot.baseSprite.y - 50;
+    }
+
+    addHealth(robot, health) {
+        robot.health += health;
+        if(robot.health > robot.totalHealth) {
+            robot.health = robot.totalHealth;
+        }
+        if(robot.health <= 0) {
+            robot.health = 0;
+        }
     }
 
     fireLazer(robot) {
@@ -156,12 +128,13 @@ class Level extends Phaser.Scene {
         var lazer = this.add.sprite(x, y, "lazer");
         lazer.rotation = robot.blasterRotation;
         this.physics.world.enable(lazer, Phaser.Physics.Arcade.DYNAMIC_BODY);
+        this.lazerGroup.add(lazer);
         lazer.body.setVelocityX(Math.cos(lazer.rotation) * this.LAZER_SPEED);
         lazer.body.setVelocityY(Math.sin(lazer.rotation) * this.LAZER_SPEED);
-        this.physics.world.addCollider(lazer, this.groundLayer, function() {
+        this.physics.world.addCollider(lazer, this.robotGroup, function() {
             lazer.destroy();
         });
-        this.physics.world.addCollider(lazer, this.robotGroup, function() {
+        this.physics.world.addCollider(lazer, this.groundLayer, function() {
             lazer.destroy();
         });
     }
@@ -195,44 +168,35 @@ class Level extends Phaser.Scene {
         var x2 = this.player.baseSprite.x;
         var y2 = this.player.baseSprite.y;
         if(this.lineOfSight(x1, y1, x2, y2)) {
-            robot.active = true;
-            robot.lastSeenX = x2;
-            robot.lastSeenY = y2;
-            robot.blasterRotation = Math.atan2(y2 - y1, x2 - x1);
-        }
-
-        if(robot.active) {
-            var targetXVelocity = robot.lastSeenX - x1;
-            var targetYVelocity = robot.lastSeenY - y1;
-
-            if(Math.abs(targetXVelocity) > Math.abs(targetYVelocity)) {
-                robot.xVelocity = targetXVelocity > 0 ? this.PLAYER_SPEED : -this.PLAYER_SPEED;
-                robot.yVelocity = 0
-            } else if (Math.abs(targetXVelocity) < Math.abs(targetYVelocity)) {
-                robot.xVelocity = 0;
-                robot.yVelocity = targetYVelocity > 0 ? this.PLAYER_SPEED : -this.PLAYER_SPEED;
+            if(!robot.active) {
+                robot.blasterRotation = Math.atan2(y2 - y1, x2 - x1) + (Math.random() * 0.3 - 0.15);
             }
+            if(Math.random() < 0.015) {
+                robot.blasterRotation = Math.atan2(y2 - y1, x2 - x1) + (Math.random() * 0.3 - 0.15);
+                this.fireLazer(robot);
+            }
+            robot.active = true;
+        } else {
+            robot.active = false;
         }
     }
 
     create() {
-
-        this.distanceMapCache = [];
-
         this.map = this.add.tilemap("tilemap");
 
         this.tileset = this.map.addTilesetImage("tilesheet", "tilesheet");
 
-        // // Create the layers
+        // Create the layers
         this.groundLayer = this.map.createLayer("Tiles", this.tileset, 0, 0);
         this.groundLayer.setCollisionByProperty({
             collides: true
         });
 
+        this.lazerGroup = this.add.group();
         this.robotGroup = this.add.group();
 
         var playerSprite = this.map.createFromObjects("Player", { key: "robots_sheet", frame: 0 })[0];
-        this.player = this.createRobot(playerSprite);
+        this.player = this.createRobot(playerSprite, 20);
         this.cameras.main.startFollow(playerSprite, true, 0.25, 0.25);
         this.cameras.main.setBounds(0, 0, this.map.widthInPixels, this.map.heightInPixels);
         this.cameras.main.setDeadzone(50, 50);
@@ -240,7 +204,7 @@ class Level extends Phaser.Scene {
         var enemySprites = this.map.createFromObjects("Enemies", { key: "robots_sheet", frame: 3 });
         this.enemies = [];
         for(var i = 0; i < enemySprites.length; i++) {
-            this.enemies.push(this.createRobot(enemySprites[i]));
+            this.enemies.push(this.createRobot(enemySprites[i], 10));
         }
 
         this.wKey = this.input.keyboard.addKey("W");
@@ -267,11 +231,18 @@ class Level extends Phaser.Scene {
         this.updateRobot(this.player);
         for(var i = 0; i < this.enemies.length; i++) {
             this.updateRobot(this.enemies[i]);
+            if(this.enemies[i].health == 0) {
+                this.enemies[i].baseSprite.destroy();
+                this.enemies[i].blasterSprite.destroy();
+                this.enemies[i].healthBar.destroy();
+                this.enemies[i].healthBarBackground.destroy();
+                this.enemies.splice(i, 1);
+                i--;
+            }
         }
     }
 
     update() {
-        this.getDistanceMap(this.player.baseSprite.x / this.map.tileWidth, this.player.baseSprite.y / this.map.tileHeight);
         this.player.xVelocity = 0;
         this.player.yVelocity = 0;
         if(this.wKey.isDown) {
