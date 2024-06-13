@@ -32,6 +32,8 @@ class Level extends Phaser.Scene {
         return {
             xVelocity: 0,
             yVelocity: 0,
+            oldXVelocity: 0,
+            oldYVelcoity: 0,
             baseRotation: baseSprite.rotation,
             blasterRotation: baseSprite.rotation,
             baseSprite: baseSprite,
@@ -60,7 +62,6 @@ class Level extends Phaser.Scene {
 
         robot.baseSprite.body.setVelocityX(robot.xVelocity);
         robot.baseSprite.body.setVelocityY(robot.yVelocity);
-
         robot.baseSprite.rotation += rot / 4;
 
         robot.blasterSprite.x = robot.baseSprite.x;
@@ -83,7 +84,53 @@ class Level extends Phaser.Scene {
             lazer.destroy();
         });
     }
-  
+
+    lineOfSight(x1, y1, x2, y2) {
+        x1 /= this.tileset.tileWidth;
+        y1 /= this.tileset.tileHeight;
+        x2 /= this.tileset.tileWidth;
+        y2 /= this.tileset.tileHeight;
+        var m = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+        var sx = (x2 - x1) / m;
+        var sy = (y2 - y1) / m;
+        var d = 1;
+        while(d < m) {
+            var x = Math.floor(x1 + sx * d);
+            var y = Math.floor(y1 + sy * d);
+            var tile = this.groundLayer.getTileAt(x, y);
+            if(tile) {
+                if(tile.properties.collides) {
+                    return false;
+                }
+            }
+            d += 1;
+        }
+        return true;
+    }
+
+    updateEnemy(robot) {
+        var x1 = robot.baseSprite.x;
+        var y1 = robot.baseSprite.y;
+        var x2 = this.player.baseSprite.x;
+        var y2 = this.player.baseSprite.y;
+        if(this.lineOfSight(x1, y1, x2, y2)) {
+            robot.blasterRotation = Math.atan2(y2 - y1, x2 - x1);
+            var targetXVelocity = x2 - x1;
+            var targetYVelocity = y2 - y1;
+
+            if(Math.abs(targetXVelocity) > Math.abs(targetYVelocity)) {
+                robot.xVelocity = targetXVelocity > 0 ? this.PLAYER_SPEED : -this.PLAYER_SPEED;
+                robot.yVelocity = 0
+            } else if (Math.abs(targetXVelocity) < Math.abs(targetYVelocity)) {
+                robot.xVelocity = 0;
+                robot.yVelocity = targetYVelocity > 0 ? this.PLAYER_SPEED : -this.PLAYER_SPEED;
+            }
+        } else {
+            robot.xVelocity = 0;
+            robot.yVelocity = 0;
+        }
+    }
+
     create() {
         this.map = this.add.tilemap("tilemap");
 
@@ -113,7 +160,6 @@ class Level extends Phaser.Scene {
         this.aKey = this.input.keyboard.addKey("A");
         this.sKey = this.input.keyboard.addKey("S");
         this.dKey = this.input.keyboard.addKey("D");
-        this.spaceKey = this.input.keyboard.addKey("Space");
 
         var scene = this;
 
@@ -124,6 +170,8 @@ class Level extends Phaser.Scene {
         this.events.on("postupdate", function() {
             scene.postUpdate();
         });
+
+        console.log(this.groundLayer.getTileAt(0, 0));
 
         // // Create grid of visible tiles for use with path planning
         // let tinyTownGrid = this.layersToGrid([this.groundLayer, this.treesLayer, this.housesLayer]);
@@ -155,6 +203,10 @@ class Level extends Phaser.Scene {
     }
 
     postUpdate() {
+        for(var i = 0; i < this.enemies.length; i++) {
+            this.updateEnemy(this.enemies[i]);
+        }
+
         this.updateRobot(this.player);
         for(var i = 0; i < this.enemies.length; i++) {
             this.updateRobot(this.enemies[i]);
