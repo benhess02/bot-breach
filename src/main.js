@@ -16,7 +16,8 @@ let config = {
     },
     width: 1280,
     height: 800,
-    scene: [Load, MainMenu, Level]
+    scene: [Load, MainMenu, Credits, Level],
+    fps: 60
 }
 
 var cursors;

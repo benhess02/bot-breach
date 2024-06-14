@@ -20,10 +20,12 @@ class Load extends Phaser.Scene {
         this.load.image("lazer", "lazer.png");
 
         this.load.atlasXML("ui", "ui_sheet.png", "ui_sheet.xml");
+
+        this.load.image("health", "health.png");
     }
 
     create() {
-         this.scene.start("levelScene");
+         this.scene.start("mainMenuScene");
     }
 
     update() {

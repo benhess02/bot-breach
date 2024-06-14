@@ -1,18 +1,8 @@
-var neighbors = [
-    { x: 1, y: 0 }, 
-    { x:-1, y: 0 },
-    { x: 0, y: 1 },
-    { x: 0, y: -1 },
-    /* { x: 1, y: 1 },
-    { x: 1, y: -1 },
-    { x: -1, y: 1 },
-    { x: -1, y: -1 } */
-];
-
 class Level extends Phaser.Scene {
 
     robotGroup;
     lazerGroup;
+    healthGroup;
 
     player;
     enemies;
@@ -39,6 +29,7 @@ class Level extends Phaser.Scene {
         this.TILEHEIGHT = 25;
 
         this.PLAYER_SPEED = 200;
+        this.ENEMY_SPEED = 100;
         this.LAZER_SPEED = 1000;
     }
 
@@ -80,12 +71,6 @@ class Level extends Phaser.Scene {
 
     updateRobot(robot) {
         if(robot.xVelocity != 0 || robot.yVelocity != 0) {
-            var sqMag = robot.xVelocity * robot.xVelocity + robot.yVelocity * robot.yVelocity;
-            if(sqMag > 1.01) {
-                var mag = Math.sqrt(sqMag);
-                robot.xVelocity = (robot.xVelocity / mag) * this.PLAYER_SPEED;
-                robot.yVelocity = (robot.yVelocity / mag) * this.PLAYER_SPEED;
-            }
             robot.baseRotation = Math.atan2(robot.yVelocity, robot.xVelocity);
         }
 
@@ -131,19 +116,12 @@ class Level extends Phaser.Scene {
         this.lazerGroup.add(lazer);
         lazer.body.setVelocityX(Math.cos(lazer.rotation) * this.LAZER_SPEED);
         lazer.body.setVelocityY(Math.sin(lazer.rotation) * this.LAZER_SPEED);
-        this.physics.world.addCollider(lazer, this.robotGroup, function() {
-            lazer.destroy();
-        });
         this.physics.world.addCollider(lazer, this.groundLayer, function() {
             lazer.destroy();
         });
     }
 
     lineOfSight(x1, y1, x2, y2) {
-        x1 /= this.tileset.tileWidth;
-        y1 /= this.tileset.tileHeight;
-        x2 /= this.tileset.tileWidth;
-        y2 /= this.tileset.tileHeight;
         var m = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
         var sx = (x2 - x1) / m;
         var sy = (y2 - y1) / m;
@@ -163,21 +141,37 @@ class Level extends Phaser.Scene {
     }
 
     updateEnemy(robot) {
-        var x1 = robot.baseSprite.x;
-        var y1 = robot.baseSprite.y;
-        var x2 = this.player.baseSprite.x;
-        var y2 = this.player.baseSprite.y;
+        var x1 = robot.baseSprite.x / this.map.tileWidth;
+        var y1 = robot.baseSprite.y / this.map.tileHeight;
+        var x2 = this.player.baseSprite.x / this.map.tileWidth;
+        var y2 = this.player.baseSprite.y / this.map.tileHeight;
         if(this.lineOfSight(x1, y1, x2, y2)) {
-            if(!robot.active) {
-                robot.blasterRotation = Math.atan2(y2 - y1, x2 - x1) + (Math.random() * 0.3 - 0.15);
-            }
-            if(Math.random() < 0.015) {
+            if(Math.random() < 0.025) {
                 robot.blasterRotation = Math.atan2(y2 - y1, x2 - x1) + (Math.random() * 0.3 - 0.15);
                 this.fireLazer(robot);
             }
-            robot.active = true;
+
+            if(Math.abs(robot.xVelocity) > Math.abs(robot.yVelocity)) {
+                if(Math.abs(x1 - x2) < 1) {
+                    robot.xVelocity = 0;
+                    robot.yVelocity = y2 > y1 ? this.ENEMY_SPEED : -this.ENEMY_SPEED;
+                }
+            }
+            else if (Math.abs(robot.xVelocity) < Math.abs(robot.yVelocity)) {
+                if(Math.abs(y1 - y2) < 1) {
+                    robot.xVelocity = x2 > x1 ? this.ENEMY_SPEED : -this.ENEMY_SPEED;
+                    robot.yVelocity = 0;
+                }
+            } else if (Math.abs(x1 - x2) > Math.abs(y1 - y2)) {
+                robot.xVelocity = x2 > x1 ? this.ENEMY_SPEED : -this.ENEMY_SPEED;
+                robot.yVelocity = 0;
+            } else {
+                robot.xVelocity = 0;
+                robot.yVelocity = y2 > y1 ? this.ENEMY_SPEED : -this.ENEMY_SPEED;
+            }
         } else {
-            robot.active = false;
+            robot.xVelocity = 0;
+            robot.yVelocity = 0;
         }
     }
 
@@ -194,6 +188,7 @@ class Level extends Phaser.Scene {
 
         this.lazerGroup = this.add.group();
         this.robotGroup = this.add.group();
+        this.healthGroup = this.add.group();
 
         var playerSprite = this.map.createFromObjects("Player", { key: "robots_sheet", frame: 0 })[0];
         this.player = this.createRobot(playerSprite, 20);
@@ -201,10 +196,15 @@ class Level extends Phaser.Scene {
         this.cameras.main.setBounds(0, 0, this.map.widthInPixels, this.map.heightInPixels);
         this.cameras.main.setDeadzone(50, 50);
 
+        this.physics.world.addCollider(playerSprite, this.healthGroup, function(ojb1, obj2) {
+            scene.addHealth(scene.player, 10);
+            obj2.destroy();
+        });
+
         var enemySprites = this.map.createFromObjects("Enemies", { key: "robots_sheet", frame: 3 });
         this.enemies = [];
         for(var i = 0; i < enemySprites.length; i++) {
-            this.enemies.push(this.createRobot(enemySprites[i], 10));
+            this.enemies.push(this.createRobot(enemySprites[i], 20));
         }
 
         this.wKey = this.input.keyboard.addKey("W");
@@ -214,11 +214,15 @@ class Level extends Phaser.Scene {
 
         var scene = this;
 
+        this.input.keyboard.addKey("R").on("down", function() {
+            scene.scene.start("levelScene");
+        });
+
         this.input.on("pointerdown", function() {
             scene.fireLazer(scene.player);
         });
 
-        this.events.on("postupdate", function() {
+        this.events.on("postupdate", function(time, delta) {
             scene.postUpdate();
         });
     }
@@ -229,9 +233,17 @@ class Level extends Phaser.Scene {
         }
 
         this.updateRobot(this.player);
+        if(this.player.health == 0) {
+            this.scene.start("mainMenuScene");
+        }
+
         for(var i = 0; i < this.enemies.length; i++) {
             this.updateRobot(this.enemies[i]);
             if(this.enemies[i].health == 0) {
+                var health = this.add.sprite(this.enemies[i].baseSprite.x, this.enemies[i].baseSprite.y, "health");
+                this.physics.world.enable(health, Phaser.Physics.Arcade.STATIC_BODY);
+                this.healthGroup.add(health);
+
                 this.enemies[i].baseSprite.destroy();
                 this.enemies[i].blasterSprite.destroy();
                 this.enemies[i].healthBar.destroy();
@@ -246,16 +258,22 @@ class Level extends Phaser.Scene {
         this.player.xVelocity = 0;
         this.player.yVelocity = 0;
         if(this.wKey.isDown) {
-            this.player.yVelocity = -this.PLAYER_SPEED;
+            this.player.yVelocity = -1;
         }
         if(this.aKey.isDown) {
-            this.player.xVelocity = -this.PLAYER_SPEED;
+            this.player.xVelocity = -1;
         }
         if(this.sKey.isDown) {
-            this.player.yVelocity = this.PLAYER_SPEED;
+            this.player.yVelocity = 1;
         }
         if(this.dKey.isDown) {
-            this.player.xVelocity = this.PLAYER_SPEED;
+            this.player.xVelocity = 1;
+        }
+
+        if(this.player.xVelocity != 0 || this.player.yVelocity != 0) {
+            var mag = Math.sqrt(this.player.xVelocity * this.player.xVelocity + this.player.yVelocity * this.player.yVelocity);
+            this.player.xVelocity = (this.player.xVelocity / mag) * this.PLAYER_SPEED;
+            this.player.yVelocity = (this.player.yVelocity / mag) * this.PLAYER_SPEED;
         }
 
         var mx = this.input.mousePointer.x - config.width / 2;
