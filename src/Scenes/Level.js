@@ -1,3 +1,6 @@
+var totalEnemies;
+var destroyedEnemies;
+
 class Level extends Phaser.Scene {
 
     robotGroup;
@@ -206,6 +209,8 @@ class Level extends Phaser.Scene {
         for(var i = 0; i < enemySprites.length; i++) {
             this.enemies.push(this.createRobot(enemySprites[i], 20));
         }
+        totalEnemies = enemySprites.length;
+        destroyedEnemies = 0;
 
         this.wKey = this.input.keyboard.addKey("W");
         this.aKey = this.input.keyboard.addKey("A");
@@ -233,8 +238,8 @@ class Level extends Phaser.Scene {
         }
 
         this.updateRobot(this.player);
-        if(this.player.health == 0) {
-            this.scene.start("mainMenuScene");
+        if(this.player.health == 0 || destroyedEnemies == totalEnemies) {
+            this.scene.start("endScene");
         }
 
         for(var i = 0; i < this.enemies.length; i++) {
@@ -249,6 +254,7 @@ class Level extends Phaser.Scene {
                 this.enemies[i].healthBar.destroy();
                 this.enemies[i].healthBarBackground.destroy();
                 this.enemies.splice(i, 1);
+                destroyedEnemies += 1;
                 i--;
             }
         }

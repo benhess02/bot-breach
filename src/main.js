@@ -16,7 +16,7 @@ let config = {
     },
     width: 1280,
     height: 800,
-    scene: [Load, MainMenu, Credits, Level],
+    scene: [Load, MainMenu, Credits, Level, End],
     fps: 60
 }
 
